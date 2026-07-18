@@ -1,13 +1,6 @@
 package com.jimmy.sheepcardgame
 
-import com.jimmy.sheepcardgame.data.Card
-import com.jimmy.sheepcardgame.data.ClientRoom
-import com.jimmy.sheepcardgame.data.CoinFlip
-import com.jimmy.sheepcardgame.data.FixSheepType
-import com.jimmy.sheepcardgame.data.Opponent
-import com.jimmy.sheepcardgame.data.Player
-import com.jimmy.sheepcardgame.data.Sheep
-import com.jimmy.sheepcardgame.data.SheepSide
+import com.jimmy.sheepcardgame.data.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -45,13 +38,22 @@ sealed interface S2CEvent {
     data object CloseCoinFlipS2CEvent : S2CEvent
 
     @Serializable
-    data class SelectFromGivenSheepS2CEvent(val amount: Int, val sheep: List<Sheep>, val selectHalf: Boolean): S2CEvent
+    data class SelectFromGivenSheepS2CEvent(val amount: Int, val sheep: List<Sheep>, val selectHalf: Boolean) : S2CEvent
 
     @Serializable
-    data class SelectSheepFromGivenCardsS2CEvent(val cards: List<Card>): S2CEvent
+    data class SelectSheepFromGivenCardsS2CEvent(val cards: List<Card>) : S2CEvent
 
     @Serializable
     data class NotificationS2CEvent(val message: String) : S2CEvent
+
+    @Serializable
+    data object LastTurn : S2CEvent
+
+    @Serializable
+    data object FinalRound : S2CEvent
+
+    @Serializable
+    data class GameOverS2CEvent(val points: List<Pair<String,Int>>) : S2CEvent
 
     fun encodeToString(): String = Json.encodeToString(this)
 
@@ -76,7 +78,7 @@ sealed interface C2SEvent {
     data class ReFlipCoinC2SEvent(val cardId: Int, val user: Long) : C2SEvent
 
     @Serializable
-    data class SkipReFlipCoinC2SEvent(val user: Long) : C2SEvent
+    data class SkipReFlipCoinC2SEvent(val permanent: Boolean, val user: Long) : C2SEvent
 
     @Serializable
     data class EndCoinFlipC2SEvent(val user: Long) : C2SEvent
@@ -85,7 +87,7 @@ sealed interface C2SEvent {
     data class SelectedCardsC2SEvent(val cards: List<Int>, val cardId: Int, val opponentId: Long, val user: Long) : C2SEvent
 
     @Serializable
-    data class SelectedSheepC2SEvent(val sheep: List<Pair<Sheep,SheepSide?>>, val user: Long) : C2SEvent
+    data class SelectedSheepC2SEvent(val sheep: List<Pair<Sheep, SheepSide?>>, val user: Long) : C2SEvent
 
     @Serializable
     data class SelectedCardsForSheepC2SEvent(val cards: List<Int>, val user: Long) : C2SEvent

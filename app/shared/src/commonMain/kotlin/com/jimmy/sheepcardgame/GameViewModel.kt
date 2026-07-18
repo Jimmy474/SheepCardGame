@@ -42,62 +42,65 @@ class GameViewModel : ViewModel() {
 
     private fun processEventSequentially(event: S2CEvent) {
         when (event) {
-            is S2CEvent.UpdatePlayersS2CEvent        -> {
+            is S2CEvent.UpdatePlayersS2CEvent             -> {
                 state.update { it.copy(player = event.player, opponents = event.opponents, currentTurnPlayer = event.activeTurnPlayer) }
             }
 
-            is S2CEvent.InitializePlayerS2CEvent     -> {
+            is S2CEvent.InitializePlayerS2CEvent          -> {
                 state.update { it.copy(player = event.player) }
             }
 
-            is S2CEvent.InitializeOpponentsS2CEvent  -> {
+            is S2CEvent.InitializeOpponentsS2CEvent       -> {
                 state.update { it.copy(opponents = event.opponents) }
             }
 
-            is S2CEvent.OpponentJoinedS2C            -> {
+            is S2CEvent.OpponentJoinedS2C                 -> {
                 state.update { it.copy(opponents = it.opponents + event.opponent) }
             }
 
-            is S2CEvent.OpponentLeftS2C              -> {
+            is S2CEvent.OpponentLeftS2C                   -> {
                 state.update { it.copy(opponents = it.opponents - event.opponent) }
             }
 
-            is S2CEvent.SelectFromGivenCardsS2CEvent -> onEvent(GameEvents.ChangeDialog(GameDialogs.SelectCards(event.amount, event.cards, event.cardId, event.opponentId)))
-            is S2CEvent.SelectFromGivenSheepS2CEvent -> onEvent(GameEvents.ChangeDialog(GameDialogs.SelectSheep(event.amount, event.sheep, event.selectHalf)))
+            is S2CEvent.SelectFromGivenCardsS2CEvent      -> onEvent(GameEvents.ChangeDialog(GameDialogs.SelectCards(event.amount, event.cards, event.cardId, event.opponentId)))
+            is S2CEvent.SelectFromGivenSheepS2CEvent      -> onEvent(GameEvents.ChangeDialog(GameDialogs.SelectSheep(event.amount, event.sheep, event.selectHalf)))
             is S2CEvent.SelectSheepFromGivenCardsS2CEvent -> onEvent(GameEvents.ChangeDialog(GameDialogs.SelectCardsForSheep(event.cards)))
 
-            is S2CEvent.UpdateClientRoomS2CEvent     -> {
+            is S2CEvent.UpdateClientRoomS2CEvent          -> {
                 state.update { it.copy(clientRoom = event.clientRoom) }
             }
 
-            is S2CEvent.ExceedsMaxHandSizeS2CEvent   -> {
+            is S2CEvent.ExceedsMaxHandSizeS2CEvent        -> {
                 onEvent(GameEvents.ChangeDialog(GameDialogs.ExceedsMaxHandSize(event.extraCards)))
             }
 
-            is S2CEvent.CoinFlipInitiateS2CEvent -> {
+            is S2CEvent.CoinFlipInitiateS2CEvent          -> {
                 state.update { it.copy(coinFlip = event.coinFlip) }
-                if(state.value.dialog is GameDialogs.CoinFlip) return
+                if (state.value.dialog is GameDialogs.CoinFlip || event.coinFlip.closedDialog.contains(state.value.player?.info?.id ?: -1)) return
                 onEvent(GameEvents.ChangeDialog(GameDialogs.CoinFlip))
             }
 
-            is S2CEvent.CloseCoinFlipS2CEvent -> {
+            is S2CEvent.CloseCoinFlipS2CEvent             -> {
                 state.update { it.copy(coinFlip = null) }
-                if(state.value.dialog is GameDialogs.CoinFlip) onEvent(GameEvents.ChangeDialog(GameDialogs.None))
+                if (state.value.dialog is GameDialogs.CoinFlip) onEvent(GameEvents.ChangeDialog(GameDialogs.None))
             }
 
-            is S2CEvent.NotificationS2CEvent -> onEvent(GameEvents.ChangeDialog(GameDialogs.Info(event.message)))
+            is S2CEvent.NotificationS2CEvent              -> onEvent(GameEvents.ChangeDialog(GameDialogs.Info(event.message)))
+            S2CEvent.LastTurn                             -> onEvent(GameEvents.ChangeDialog(GameDialogs.Info("This is your last turn, make sure you play all your cards.")))
+            S2CEvent.FinalRound                           -> onEvent(GameEvents.ChangeDialog(GameDialogs.Info("The Final Round Begins now. Each player get 1 last turn before the game ends.")))
+            is S2CEvent.GameOverS2CEvent                  -> onEvent(GameEvents.ChangeDialog(GameDialogs.GameOver(event.points)))
         }
     }
 
     fun onEvent(event: GameEvents): Job {
         return viewModelScope.launch {
             when (event) {
-                is GameEvents.ChangeDialog        -> {
-                    if(event.dialog is GameDialogs.SelectCoinFace && state.value.player?.hand?.none { it.id == event.dialog.cardId } == true) return@launch
+                is GameEvents.ChangeDialog                -> {
+                    if (event.dialog is GameDialogs.SelectCoinFace && state.value.player?.hand?.none { it.id == event.dialog.cardId } == true) return@launch
                     state.update { it.copy(dialog = event.dialog) }
                 }
 
-                GameEvents.PlayCards              -> {
+                GameEvents.PlayCards                      -> {
                     state.value.let {
                         if (it.player == null || it.currentTurnPlayer == -1L || it.player.info.id != it.currentTurnPlayer || it.selectedCards.isEmpty()) return@launch
                         if (it.selectedCards.size < 2) {
@@ -123,7 +126,7 @@ class GameViewModel : ViewModel() {
                     }
                 }
 
-                is GameEvents.ToggleCard          -> state.update { gameState ->
+                is GameEvents.ToggleCard                  -> state.update { gameState ->
                     val selected = gameState.selectedCards
                         .filter { id -> gameState.player!!.hand.any { it.id == id } }
                         .toMutableList()
@@ -135,12 +138,19 @@ class GameViewModel : ViewModel() {
                     gameState.copy(selectedCards = selected)
                 }
 
-                GameEvents.EndTurn                -> sendC2SEvent(C2SEvent.EndTurnC2SEvent)
+                GameEvents.EndTurn                        -> sendC2SEvent(C2SEvent.EndTurnC2SEvent)
 
-                is GameEvents.Wolf                -> client.sendEventToServer(C2SEvent.WolfC2SEvent(event.sheep, event.cardId, event.owner, state.value.player!!.info.id))
-                is GameEvents.Wheat               -> client.sendEventToServer(C2SEvent.WheatC2SEvent(event.sheep, event.cardId, event.owner, state.value.player!!.info.id))
-                is GameEvents.Yoink               -> client.sendEventToServer(C2SEvent.RequestCardSelectionC2SEvent(event.opponent, event.cardId, state.value.player!!.info.id))
-                is GameEvents.SubmitSelectedCards -> client.sendEventToServer(
+                is GameEvents.Wolf                        -> client.sendEventToServer(C2SEvent.WolfC2SEvent(event.sheep, event.cardId, event.owner, state.value.player!!.info.id))
+                is GameEvents.Wheat                       -> client.sendEventToServer(C2SEvent.WheatC2SEvent(event.sheep, event.cardId, event.owner, state.value.player!!.info.id))
+                is GameEvents.Yoink                       -> client.sendEventToServer(
+                    C2SEvent.RequestCardSelectionC2SEvent(
+                        event.opponent,
+                        event.cardId,
+                        state.value.player!!.info.id
+                    )
+                )
+
+                is GameEvents.SubmitSelectedCards         -> client.sendEventToServer(
                     C2SEvent.SelectedCardsC2SEvent(
                         event.cards,
                         event.cardId,
@@ -148,16 +158,26 @@ class GameViewModel : ViewModel() {
                         state.value.player!!.info.id
                     )
                 )
-                is GameEvents.SubmitSelectedSheep -> client.sendEventToServer(C2SEvent.SelectedSheepC2SEvent(event.sheep, state.value.player!!.info.id))
+
+                is GameEvents.SubmitSelectedSheep         -> client.sendEventToServer(C2SEvent.SelectedSheepC2SEvent(event.sheep, state.value.player!!.info.id))
                 is GameEvents.SubmitSelectedCardsForSheep -> client.sendEventToServer(C2SEvent.SelectedCardsForSheepC2SEvent(event.cards, state.value.player!!.info.id))
 
-                is GameEvents.RequestCoinFlip -> client.sendEventToServer(C2SEvent.RequestCoinFlipC2SEvent(event.card, event.isHead, event.opponentId, state.value.player!!.info.id))
-                GameEvents.FlipCoin -> client.sendEventToServer(C2SEvent.InitiateCoinFlipC2SEvent(state.value.player!!.info.id))
-                is GameEvents.ReFlip -> client.sendEventToServer(C2SEvent.ReFlipCoinC2SEvent(event.cardId, state.value.player!!.info.id))
-                GameEvents.SkipReFlip -> client.sendEventToServer(C2SEvent.SkipReFlipCoinC2SEvent(state.value.player!!.info.id))
-                GameEvents.EndCoinFlip -> client.sendEventToServer(C2SEvent.EndCoinFlipC2SEvent(state.value.player!!.info.id))
+                is GameEvents.RequestCoinFlip             -> client.sendEventToServer(
+                    C2SEvent.RequestCoinFlipC2SEvent(
+                        event.card,
+                        event.isHead,
+                        event.opponentId,
+                        state.value.player!!.info.id
+                    )
+                )
 
-                is GameEvents.FixSheep            -> client.sendEventToServer(
+                GameEvents.FlipCoin                       -> client.sendEventToServer(C2SEvent.InitiateCoinFlipC2SEvent(state.value.player!!.info.id))
+                is GameEvents.ReFlip                      -> client.sendEventToServer(C2SEvent.ReFlipCoinC2SEvent(event.cardId, state.value.player!!.info.id))
+                GameEvents.CloseFlip                      -> client.sendEventToServer(C2SEvent.SkipReFlipCoinC2SEvent(true, state.value.player!!.info.id))
+                GameEvents.SkipReFlip                     -> client.sendEventToServer(C2SEvent.SkipReFlipCoinC2SEvent(false, state.value.player!!.info.id))
+                GameEvents.EndCoinFlip                    -> client.sendEventToServer(C2SEvent.EndCoinFlipC2SEvent(state.value.player!!.info.id))
+
+                is GameEvents.FixSheep                    -> client.sendEventToServer(
                     C2SEvent.FixSheepC2SEvent(
                         event.fixType,
                         event.sheep,
@@ -167,7 +187,17 @@ class GameViewModel : ViewModel() {
                     )
                 )
 
-                is GameEvents.Discard             -> client.sendEventToServer(C2SEvent.DiscardC2SEvent(event.card, state.value.player!!.info.id))
+                is GameEvents.Discard                     -> client.sendEventToServer(C2SEvent.DiscardC2SEvent(event.card, state.value.player!!.info.id))
+
+                GameEvents.ResetGame                      -> {
+                   state.update { it.copy(
+                       selectedCards = emptyList(),
+                       roomsToJoin = emptyList(),
+                       currentTurnPlayer = -1,
+                       dialog = GameDialogs.None,
+                       coinFlip = null,
+                   ) }
+                }
             }
         }
     }
@@ -198,6 +228,7 @@ class GameViewModel : ViewModel() {
     fun disconnectFromServer() {
         viewModelScope.launch {
             client.disconnect()
+            state.update { GameState() }
         }
     }
 
@@ -249,7 +280,10 @@ sealed interface GameEvents {
     data object FlipCoin : GameEvents
     data class ReFlip(val cardId: Int) : GameEvents
     data object SkipReFlip : GameEvents
+    data object CloseFlip : GameEvents
     data object EndCoinFlip : GameEvents
+
+    data object ResetGame : GameEvents
 }
 
 sealed interface GameDialogs {
@@ -260,6 +294,7 @@ sealed interface GameDialogs {
     data class SelectCards(val amount: Int, val cards: List<Int>, val cardId: Int, val opponentId: Long) : GameDialogs
     data class SelectSheep(val amount: Int, val sheep: List<Sheep>, val selectHalf: Boolean) : GameDialogs
     data class SelectCardsForSheep(val cards: List<Card>) : GameDialogs
-    data class SelectCoinFace(val cardId: Int, val opponent: PlayerInfo): GameDialogs
+    data class SelectCoinFace(val cardId: Int, val opponent: PlayerInfo) : GameDialogs
     data object CoinFlip : GameDialogs
+    data class GameOver(val points: List<Pair<String, Int>>) : GameDialogs
 }

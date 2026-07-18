@@ -7,9 +7,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.style.*
 import androidx.compose.material3.*
@@ -21,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.AndroidUiModes.UI_MODE_NIGHT_YES
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -28,8 +26,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.jimmy.sheepcardgame.*
 import com.jimmy.sheepcardgame.data.*
 import com.jimmy.sheepcardgame.ui.CardDisplay
+import com.jimmy.sheepcardgame.ui.SmallListItem
 import com.jimmy.sheepcardgame.ui.icons.*
 import com.jimmy.sheepcardgame.ui.navigation.Routes
+import com.jimmy.sheepcardgame.ui.pulsatingBorder
 import com.jimmy.sheepcardgame.ui.spiralSunBurst
 import com.jimmy.sheepcardgame.ui.theme.CardGameTheme
 import com.jimmy.sheepcardgame.ui.theme.colorScheme
@@ -43,62 +43,132 @@ val LocalOnEvent = staticCompositionLocalOf<(GameEvents) -> Unit> {
 }
 
 @Composable
-fun GameScreen(route: Routes.GameRoute, navigateTo: (Routes) -> Unit) {
+fun GameScreen(route: Routes.GameRoute, exit: () -> Unit) {
     val viewModel = koinViewModel<GameViewModel>()
     val state by viewModel.state.collectAsState()
     val isStarted = state.clientRoom?.isStarted == true
 
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.disconnectFromServer()
+        }
+    }
+
     CompositionLocalProvider(LocalOnEvent provides viewModel::onEvent) {
         Scaffold {
             if (isStarted) GameBoard(state)
-            else PreStartUI(state) { viewModel.startGame() }
+            else PreStartUI(state, { viewModel.startGame() }, exit)
         }
+
+        DisplayDialogs(state)
     }
 
 }
 
 @Composable
-fun PreStartUI(state: GameState, onStart: () -> Unit) {
+private fun DisplayDialogs(state: GameState) {
+    if (state.player == null) return
+
+    when (state.dialog) {
+        is GameDialogs.ExceedsMaxHandSize  -> ExceedsMaxHandSizeDialog(state.dialog.extraCards)
+        is GameDialogs.DiscardConfirmation -> DiscardConfirmationDialog(state.dialog.card)
+        is GameDialogs.Info                -> InfoDialog(state.dialog.message)
+        is GameDialogs.SelectCards         -> SelectCardsDialog(state.dialog)
+        is GameDialogs.SelectCoinFace      -> SelectCoinFaceDialog(state.dialog, state.player.hand.first { it.id == state.dialog.cardId })
+        is GameDialogs.CoinFlip            -> CoinFlipDialog(state)
+        is GameDialogs.SelectSheep         -> SelectSheepDialog(state.dialog)
+        is GameDialogs.SelectCardsForSheep -> SelectCardsForSheepDialog(state.dialog)
+        is GameDialogs.GameOver            -> GameOverDialog(state, state.dialog)
+
+        GameDialogs.None                   -> {}
+    }
+}
+
+@OptIn(ExperimentalFlexBoxApi::class)
+@Composable
+fun PreStartUI(state: GameState, onStart: () -> Unit, onExit: () -> Unit) {
 
     if (state.player == null || state.clientRoom == null) return
 
     Row(Modifier.fillMaxSize().padding(4.dp), Arrangement.spacedBy(4.dp)) {
-        Column(
-            Modifier.fillMaxWidth(0.3f).fillMaxHeight().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
-                .padding(4.dp),
-            Arrangement.spacedBy(8.dp),
+        Card(
+            colors = CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
         ) {
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSecondaryContainer) {
-                Text("CODE : ${state.clientRoom.code}")
-                Text("HOST : ${state.clientRoom.host.name}")
-                HorizontalDivider()
+            Column(
+                Modifier.fillMaxWidth(0.3f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(4.dp),
+                Arrangement.spacedBy(8.dp),
+                Alignment.CenterHorizontally
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ElevatedCard(
+                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                    ) {
+                        SmallListItem(
+                            Modifier.padding(8.dp),
+                            icon = {
+                                Icon(TagIcon, "Code", Modifier.size(32.dp))
+                            },
+                            headline = { Text("CODE") },
+                            text = { Text(state.clientRoom.code) }
+                        )
+                    }
+                    ElevatedCard(
+                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                    ) {
+                        SmallListItem(
+                            Modifier.padding(8.dp),
+                            icon = {
+                                Icon(CrownIcon, "Host", Modifier.size(32.dp))
+                            },
+                            headline = { Text("HOST") },
+                            text = { Text(state.clientRoom.host.name) }
+                        )
+                    }
+                }
                 Text("OPPONENTS")
+                HorizontalDivider()
                 state.opponents.forEach { opponent ->
                     Text(opponent.info.name)
                 }
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                    if (state.player.info.id == state.clientRoom.host.id && state.opponents.isNotEmpty()) {
+                        ElevatedButton(onStart) {
+                            Text("START GAME")
+                        }
+                    }
+                    ElevatedButton(onExit) {
+                        Text("EXIT")
+                    }
+                }
             }
         }
-        Column(
-            Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(4.dp))
-                .padding(4.dp), Arrangement.spacedBy(8.dp), Alignment.CenterHorizontally
+        Card(
+            Modifier.weight(1f).fillMaxHeight(),
+            colors = CardDefaults.cardColors(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer),
         ) {
-            val isEnabled = state.player.info.id == state.clientRoom.host.id
-            ElevatedButton(
-                onStart,
-                enabled = isEnabled,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f),
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-            ) {
-                Text("START GAME")
+            Column(Modifier.fillMaxSize().padding(4.dp), Arrangement.spacedBy(8.dp), Alignment.CenterHorizontally) {
+                Text("Previous Games", style = MaterialTheme.typography.displaySmallEmphasized)
+                FlexBox(Modifier.fillMaxWidth(), {
+                    gap(8.dp)
+                    wrap(FlexWrap.Wrap)
+                }) {
+                    state.clientRoom.previousGameScores.forEach {
+                        Scorecard(it)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFlexBoxApi::class, ExperimentalFoundationStyleApi::class)
+@OptIn(ExperimentalFlexBoxApi::class)
 private fun GameBoard(state: GameState) {
     if (state.player == null || state.clientRoom == null) return
 
@@ -107,18 +177,23 @@ private fun GameBoard(state: GameState) {
     Column(Modifier.fillMaxSize().padding(4.dp), Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth().weight(1f), Arrangement.spacedBy(4.dp)) {
             state.opponents.forEach { opponent ->
-                Card(Modifier.weight(1f).fillMaxHeight(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                    LazyColumn(
-                        Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        contentPadding = PaddingValues(4.dp),
-                    ) {
-                        stickyHeader {
-                            OpponentInfo(opponent, ActionAgainstOpponent.getFromHand(state.player.hand), state.currentTurnPlayer == state.player.info.id)
-                        }
-
-                        items(opponent.info.flock.sheep) { sheep ->
+                val isTurn = opponent.info.id == state.currentTurnPlayer
+                Card(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.secondaryContainer, CardDefaults.shape)
+                        .pulsatingBorder(isTurn, MaterialTheme.colorScheme.onSecondaryContainer, CardDefaults.shape, 8.dp, 4.dp),
+                    colors = CardDefaults.cardColors(Color.Transparent, MaterialTheme.colorScheme.onSecondaryContainer)
+                ) {
+                    OpponentInfo(opponent, ActionAgainstOpponent.getFromHand(state.player.hand), state.currentTurnPlayer == state.player.info.id)
+                    FlexBox(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState()), {
+                        gap(4.dp)
+                        wrap(FlexWrap.Wrap)
+                        alignItems(FlexAlignItems.End)
+                        justifyContent(FlexJustifyContent.Center)
+                    }) {
+                        opponent.info.flock.sheep.forEach { sheep ->
                             DrawSheep(
                                 SheepState.getFromSheepAndHand(sheep, state.player.hand, opponent.info.flock.isWolfProtected, opponent.info.flock.isWheatProtected),
                                 opponent.info.id,
@@ -130,26 +205,69 @@ private fun GameBoard(state: GameState) {
             }
         }
 
+
+        val isTurn = state.player.info.id == state.currentTurnPlayer
         Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            colors = CardDefaults.cardColors(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer),
         ) {
             Column(Modifier.padding(8.dp), Arrangement.spacedBy(4.dp)) {
-                LazyRow(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(4.dp),
+                Row (Modifier, Arrangement.spacedBy(12.dp), Alignment.CenterVertically) {
+                    Text("${state.player.info.name} Flock", style = MaterialTheme.typography.titleLargeEmphasized)
+                    AnimatedVisibility(state.player.info.flock.isWolfProtected) { Icon(PetsIcon, "Wolf Protected") }
+                    AnimatedVisibility(state.player.info.flock.isWheatProtected) { Icon(WheatIcon, "Wheat Protected") }
+                }
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    Arrangement.spacedBy(12.dp),
+                    Alignment.Bottom,
                 ) {
-                    items(state.player.info.flock.sheep) { sheep ->
+                    state.player.info.flock.sheep.forEach { sheep ->
                         DrawSheep(
-                            SheepState.getFromSheepAndHand(sheep, state.player.hand, wolfProtected = true, wheatProtected = true).copy(wheatCandidate = null, wolfCandidate = null),
+                            SheepState.getFromSheepAndHand(sheep, state.player.hand, wolfProtected = true, wheatProtected = true)
+                                .copy(wheatCandidate = null, wolfCandidate = null),
                             state.player.info.id,
                             state.currentTurnPlayer == state.player.info.id
                         )
                     }
                 }
-                HorizontalDivider()
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), Arrangement.spacedBy(4.dp), Alignment.CenterVertically){
+            }
+        }
+
+        Card(
+            Modifier.fillMaxWidth()
+                .background(MaterialTheme.colorScheme.tertiaryContainer, CardDefaults.shape)
+                .pulsatingBorder(isTurn, MaterialTheme.colorScheme.onTertiaryContainer, CardDefaults.shape, 8.dp, 4.dp),
+            colors = CardDefaults.cardColors(Color.Transparent, MaterialTheme.colorScheme.onTertiaryContainer),
+        ) {
+            Column(Modifier.padding(8.dp), Arrangement.spacedBy(4.dp)) {
+                Row(Modifier, Arrangement.spacedBy(12.dp), Alignment.CenterVertically) {
+                    SmallListItem(
+                        icon = { Icon(PlayingCardsIcon, contentDescription = "Deck cards count") },
+                        headline = { Text("Deck") },
+                        text = { Text("${state.clientRoom.deck}") }
+                    )
+                    SmallListItem(
+                        icon = { Icon(PlayingCardsIcon, contentDescription = "Discard Pile cards count") },
+                        headline = { Text("Discard Pile") },
+                        text = { Text("${state.clientRoom.discardPile}") }
+                    )
+                    AnimatedVisibility(state.player.info.id == state.currentTurnPlayer) {
+                        ElevatedButton({
+                            onEvent(GameEvents.PlayCards)
+                        }) {
+                            Text("Play Cards")
+                        }
+                    }
+                    AnimatedVisibility(state.player.info.id == state.currentTurnPlayer) {
+                        ElevatedButton(
+                            { onEvent(GameEvents.EndTurn) },
+                            colors = ButtonDefaults.elevatedButtonColors(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer),
+                        ) {
+                            Text("End Turn")
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), Arrangement.spacedBy(4.dp), Alignment.CenterVertically) {
                     state.player.hand.forEach { card ->
                         val isSelected = state.selectedCards.contains(card.id)
                         key(card.id) {
@@ -163,45 +281,57 @@ private fun GameBoard(state: GameState) {
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally), Alignment.CenterVertically) {
-                    Icon(PlayingCardsIcon, contentDescription = "Deck cards count")
-                    Text("${state.clientRoom.deck}")
-
-                    Icon(PlayingCardsIcon, contentDescription = "Discard Pile cards count")
-                    Text("${state.clientRoom.discardPile}")
-                    if (state.player.info.flock.isWolfProtected) Icon(PetsIcon, "Wolf Protected")
-                    if (state.player.info.flock.isWheatProtected) Icon(WheatIcon, "Wheat Protected")
-                    AnimatedVisibility(visible = state.player.info.id == state.currentTurnPlayer) {
-                        ElevatedButton({
-                            onEvent(GameEvents.PlayCards)
-                        }) {
-                            Text("Play Cards")
-                        }
-                    }
-                    AnimatedVisibility(visible = state.player.info.id == state.currentTurnPlayer) {
-                        ElevatedButton(
-                            { onEvent(GameEvents.EndTurn) },
-                            colors = ButtonDefaults.elevatedButtonColors(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer),
-                        ) {
-                            Text("End Turn")
-                        }
-                    }
-                }
             }
         }
+
     }
+}
 
-    when (state.dialog) {
-        is GameDialogs.ExceedsMaxHandSize  -> ExceedsMaxHandSizeDialog(state.dialog.extraCards)
-        is GameDialogs.DiscardConfirmation -> DiscardConfirmationDialog(state.dialog.card)
-        is GameDialogs.Info                -> InfoDialog(state.dialog.message)
-        is GameDialogs.SelectCards         -> SelectCardsDialog(state.dialog)
-        is GameDialogs.SelectCoinFace      -> SelectCoinFaceDialog(state.dialog, state.player.hand.first { it.id == state.dialog.cardId })
-        is GameDialogs.CoinFlip            -> CoinFlipDialog(state)
-        is GameDialogs.SelectSheep         -> SelectSheepDialog(state.dialog)
-        is GameDialogs.SelectCardsForSheep -> SelectCardsForSheepDialog(state.dialog)
+@Composable
+fun GameOverDialog(state: GameState, dialog: GameDialogs.GameOver) {
+    val onEvent = LocalOnEvent.current
+    if (state.player == null) return
 
-        GameDialogs.None                   -> {}
+    AlertDialog(
+        onDismissRequest = {},
+        confirmButton = {
+            ElevatedButton(onClick = {
+                onEvent(GameEvents.ResetGame)
+            }) {
+                Text("OK")
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Game Over", style = MaterialTheme.typography.displayLargeEmphasized)
+                Text("Standings", style = MaterialTheme.typography.titleLargeEmphasized)
+                Scorecard(dialog.points)
+            }
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
+    )
+}
+
+@Composable
+@OptIn(ExperimentalGridApi::class)
+private fun Scorecard(points: List<Pair<String, Int>>) {
+    Card {
+        Grid({
+            repeat(3) { column(GridTrackSize.Auto) }
+            gap(4.dp, 12.dp)
+            repeat(points.size) { row(GridTrackSize.Auto) }
+        }, Modifier.padding(8.dp)) {
+            points.forEachIndexed { i, (name, point) ->
+                val style = if (i == 0) {
+                    MaterialTheme.typography.bodyLargeEmphasized.copy(color = MaterialTheme.colorScheme.primary)
+                } else {
+                    MaterialTheme.typography.bodySmallEmphasized
+                }
+                Text("${i + 1}", style = style)
+                Text(name, Modifier.gridItem(alignment = Alignment.CenterStart), style = style)
+                Text("$point", style = style)
+            }
+        }
     }
 }
 
@@ -213,29 +343,29 @@ fun SelectCardsForSheepDialog(dialog: GameDialogs.SelectCardsForSheep) {
 
     AlertDialog(
         onDismissRequest = {}, confirmButton = {
-        ElevatedButton(onClick = {
-            if (!GameLogic.isValidSheep(selectedCards)) return@ElevatedButton
-            onEvent(GameEvents.SubmitSelectedCardsForSheep(selectedCards.map { it.id }))
-            onEvent(GameEvents.ChangeDialog(GameDialogs.None))
-        }) {
-            Text("Confirm")
-        }
-    }, title = { Text("Select Cards To Make A Valid Sheep") }, text = {
-        FlexBox(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState()), {
-            gap(4.dp)
-            alignItems(FlexAlignItems.Center)
-            justifyContent(FlexJustifyContent.Center)
-            wrap(FlexWrap.Wrap)
-        }) {
-            dialog.cards.forEach { card ->
-                CardDisplay(card, isClickable = true, isSelected = card in selectedCards, hasMenu = false) {
-                    if (!selectedCards.remove(it)) {
-                        selectedCards.add(it)
+            ElevatedButton(onClick = {
+                if (!GameLogic.isValidSheep(selectedCards)) return@ElevatedButton
+                onEvent(GameEvents.SubmitSelectedCardsForSheep(selectedCards.map { it.id }))
+                onEvent(GameEvents.ChangeDialog(GameDialogs.None))
+            }) {
+                Text("Confirm")
+            }
+        }, title = { Text("Select Cards To Make A Valid Sheep") }, text = {
+            FlexBox(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState()), {
+                gap(4.dp)
+                alignItems(FlexAlignItems.Center)
+                justifyContent(FlexJustifyContent.Center)
+                wrap(FlexWrap.Wrap)
+            }) {
+                dialog.cards.forEach { card ->
+                    CardDisplay(card, isClickable = true, isSelected = card in selectedCards, hasMenu = false) {
+                        if (!selectedCards.remove(it)) {
+                            selectedCards.add(it)
+                        }
                     }
                 }
             }
-        }
-    }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
+        }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
     )
 }
 
@@ -243,35 +373,38 @@ fun SelectCardsForSheepDialog(dialog: GameDialogs.SelectCardsForSheep) {
 @Composable
 fun SelectSheepDialog(dialog: GameDialogs.SelectSheep) {
     val onEvent = LocalOnEvent.current
-    val selectedSheep = remember { mutableStateListOf<Pair<Sheep, SheepSide?>>() }
+    val selectedSheep = remember { mutableStateSetOf<Pair<Sheep, SheepSide?>>() }
 
     AlertDialog(
         onDismissRequest = {}, confirmButton = {
-        ElevatedButton(onClick = {
-            onEvent(GameEvents.SubmitSelectedSheep(selectedSheep))
-            onEvent(GameEvents.ChangeDialog(GameDialogs.None))
-        }) {
-            Text("Confirm")
-        }
-    }, title = { Text("Select ${dialog.amount} Sheep${if (dialog.selectHalf) " Half" else ""}") }, text = {
-        FlexBox(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState()), {
-            gap(4.dp)
-            alignItems(FlexAlignItems.Center)
-            justifyContent(FlexJustifyContent.Center)
-            wrap(FlexWrap.Wrap)
-        }) {
-            dialog.sheep.forEach { sheep ->
-                val selected = selectedSheep.firstOrNull { it.first == sheep }
-                DrawSelectableSheep(sheep, selected != null, selected?.second, dialog.selectHalf) { s, side ->
-                    if (selected != null) {
-                        selectedSheep.remove(selected)
-                    } else {
-                        selectedSheep.add(s to side)
+            ElevatedButton(onClick = {
+                onEvent(GameEvents.SubmitSelectedSheep(selectedSheep.toList()))
+                onEvent(GameEvents.ChangeDialog(GameDialogs.None))
+            }) {
+                Text("Confirm")
+            }
+        }, title = { Text("Select ${dialog.amount} Sheep${if (dialog.selectHalf) " Half" else ""}") }, text = {
+            FlexBox(Modifier.fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState()), {
+                gap(4.dp)
+                alignItems(FlexAlignItems.Center)
+                justifyContent(FlexJustifyContent.Center)
+                wrap(FlexWrap.Wrap)
+            }) {
+                dialog.sheep.forEach { sheep ->
+                    val selected = selectedSheep.firstOrNull { it.first == sheep }
+                    DrawSelectableSheep(sheep, selected != null, selected?.second, dialog.selectHalf) { s, side ->
+                        if (selected != null) {
+                            selectedSheep.remove(selected)
+                            if (side != selected.second) {
+                                selectedSheep.add(s to side)
+                            }
+                        } else {
+                            selectedSheep.add(s to side)
+                        }
                     }
                 }
             }
-        }
-    }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
+        }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
     )
 }
 
@@ -315,57 +448,63 @@ fun CoinFlipDialog(state: GameState) {
     }
 
     AlertDialog(
-        onDismissRequest = {}, confirmButton = {
-        if (coinFlip.target == state.player.info.id && coinFlip.currentResult == null) {
-            ElevatedButton(onClick = {
-                onEvent(GameEvents.FlipCoin)
-            }) {
-                Text("Flip Coin")
-            }
-        }
-        if (coinFlip.currentResult != null) {
-            if (!coinFlip.canReFlip) {
+        onDismissRequest = {},
+        confirmButton = {
+            if (coinFlip.target == state.player.info.id && coinFlip.currentResult == null) {
                 ElevatedButton(onClick = {
-                    onEvent(GameEvents.ChangeDialog(GameDialogs.None))
+                    onEvent(GameEvents.FlipCoin)
+                }) {
+                    Text("Flip Coin")
+                }
+            }
+            if (coinFlip.currentResult != null && isAnimationFinished) {
+                Row {
                     val isWinner = if (coinFlip.playerChoice == coinFlip.currentResult) coinFlip.attacker == state.player.info.id else coinFlip.target == state.player.info.id
-                    if (isWinner) {
-                        onEvent(GameEvents.EndCoinFlip)
-                    }
-                }) { Text("Close") }
-            } else if (state.player.info.id !in coinFlip.skippedReFlip) {
-                state.player.hand.firstOrNull { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip }?.let {
-                    Row {
-                        ElevatedButton(onClick = { onEvent(GameEvents.ReFlip(it.id)) }) { Text("Consume ReFlip Card & Re-Flip") }
-                        OutlinedButton(onClick = { onEvent(GameEvents.SkipReFlip) }) { Text("Skip Re-Flip") }
-                    }
-                }
-            }
-        }
-    }, title = { Text("Coin Flip") }, text = {
-        if (headsComposition.isLoading || tailsComposition.isLoading) {
-            CircularProgressIndicator()
-        } else {
-            Column {
-                Text("$playerName Played")
-                CardDisplay(coinFlip.goldCard)
-                Text("Against $opponentName And Called ${if (coinFlip.playerChoice) "Heads" else "Tails"}, Result Is... ")
-
-                coinFlip.currentResult?.let { result ->
-                    if (activeComposition == null) {
-                        CircularProgressIndicator()
-                    } else {
-                        Image(
-                            painter = rememberLottiePainter(
-                            composition = activeComposition, progress = { animatable.progress }), contentDescription = "Coin Flip Animation")
-                    }
-
-                    if (isAnimationFinished) {
-                        Text("${if (result == coinFlip.playerChoice) playerName else opponentName} Wins.")
+                    ElevatedButton(onClick = {
+                        onEvent(GameEvents.ChangeDialog(GameDialogs.None))
+                        if (isWinner) {
+                            onEvent(GameEvents.EndCoinFlip)
+                        } else if (coinFlip.canReFlip) {
+                            onEvent(GameEvents.CloseFlip)
+                        }
+                    }) { Text("Close") }
+                    if (state.player.info.id !in coinFlip.skippedReFlip && isAnimationFinished) {
+                        state.player.hand.firstOrNull { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip }?.let {
+                            ElevatedButton(onClick = { onEvent(GameEvents.ReFlip(it.id)) }) { Text("Consume ReFlip Card & Re-Flip") }
+                            OutlinedButton(onClick = { onEvent(GameEvents.SkipReFlip) }) { Text("Skip Re-Flip") }
+                        }
                     }
                 }
             }
-        }
-    }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
+        }, title = { Text("Coin Flip") },
+        text = {
+            if (headsComposition.isLoading || tailsComposition.isLoading) {
+                CircularProgressIndicator()
+            } else {
+                Column(Modifier.verticalScroll(rememberScrollState()), Arrangement.spacedBy(8.dp), Alignment.CenterHorizontally) {
+                    Text("$playerName Played")
+                    CardDisplay(coinFlip.goldCard)
+                    Text("Against $opponentName And Called ${if (coinFlip.playerChoice) "Heads" else "Tails"}, ${if(coinFlip.currentResult == null) "Waiting for $opponentName to flip..." else "Result is..."}")
+
+                    coinFlip.currentResult?.let { result ->
+                        if (activeComposition == null) {
+                            CircularProgressIndicator()
+                        } else {
+                            Image(
+                                painter = rememberLottiePainter(composition = activeComposition, progress = { animatable.progress }),
+                                contentDescription = "Coin Flip Animation",
+                                modifier = Modifier.size(100.dp),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+
+                        if (isAnimationFinished) {
+                            Text("${if (result == coinFlip.playerChoice) playerName else opponentName} Wins.")
+                        }
+                    }
+                }
+            }
+        }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
     )
 }
 
@@ -465,8 +604,8 @@ fun SelectCardsDialog(dialog: GameDialogs.SelectCards) {
                 }
                 Box(
                     Modifier.width(80.dp).aspectRatio(5f / 7f).hoverable(interactionSource).styleable(styleState, style).clickable {
-                            if (!selectedCards.remove(cardId)) selectedCards.add(cardId)
-                        }) {
+                        if (!selectedCards.remove(cardId)) selectedCards.add(cardId)
+                    }) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         spiralSunBurst(Color(0xFFf299ba), Color(0xFFf8c7d5), 20, 0f, 90f)
                     }
@@ -559,17 +698,12 @@ fun OpponentInfo(opponent: Opponent, aao: ActionAgainstOpponent, hasMenu: Boolea
     val onEvent = LocalOnEvent.current
 
     Box {
-        Column(
-            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp)).padding(8.dp)
-                .clickable { isMenuExpanded = !isMenuExpanded }, horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(opponent.info.name)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(PlayingCardsIcon, contentDescription = "${opponent.info.name} cards count")
-                Text(opponent.numCards.toString())
-                if (opponent.info.flock.isWolfProtected) Icon(PetsIcon, "Wolf Protected")
-                if (opponent.info.flock.isWheatProtected) Icon(WheatIcon, "Wheat Protected")
-            }
+        Row(Modifier.padding(8.dp).clickable { isMenuExpanded = !isMenuExpanded }, Arrangement.spacedBy(8.dp), Alignment.CenterVertically) {
+            Text(opponent.info.name, style = MaterialTheme.typography.titleLarge)
+            Icon(PlayingCardsIcon, contentDescription = "${opponent.info.name} cards count")
+            Text(opponent.numCards.toString())
+            if (opponent.info.flock.isWolfProtected) Icon(PetsIcon, "Wolf Protected")
+            if (opponent.info.flock.isWheatProtected) Icon(WheatIcon, "Wheat Protected")
         }
 
         DropdownMenu(
@@ -633,24 +767,27 @@ private fun DrawSheep(state: SheepState, owner: Long, hasMenu: Boolean) {
     var isMenuExpanded by remember { mutableStateOf(false) }
     val onEvent = LocalOnEvent.current
 
-    Box(Modifier.pointerInput(Unit) {
-            detectTapGestures(onLongPress = { isMenuExpanded = true })
-        }.pointerInput(Unit) {
-            awaitEachGesture {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                        event.changes.forEach { it.consume() }
-                        isMenuExpanded = true
+    Box(
+        Modifier
+            .pointerInput(Unit) {
+                detectTapGestures(onLongPress = { isMenuExpanded = true })
+            }.pointerInput(Unit) {
+                awaitEachGesture {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            event.changes.forEach { it.consume() }
+                            isMenuExpanded = true
+                        }
                     }
                 }
             }
-        }) {
+    ) {
         state.sheep.modifier?.let { card ->
             CardDisplay(card, Modifier.align(Alignment.TopCenter))
         }
         Row(
-            Modifier.align(Alignment.Center).then(
+            Modifier.then(
                 if (state.sheep.modifier != null) Modifier.padding(top = 25.dp)
                 else Modifier
             ),
@@ -659,8 +796,7 @@ private fun DrawSheep(state: SheepState, owner: Long, hasMenu: Boolean) {
             CardDisplay(state.sheep.head, Modifier.rotate(if (state.sheep.isFrankenButts) 180f else 0f))
             CardDisplay(state.sheep.butt, Modifier.rotate(if (state.sheep.isFrankenHeads) 180f else 0f))
         }
-        DropdownMenu(
-            expanded = isMenuExpanded && hasMenu, onDismissRequest = { isMenuExpanded = false }) {
+        DropdownMenu(expanded = isMenuExpanded && hasMenu, onDismissRequest = { isMenuExpanded = false }) {
             DropdownMenuItem(text = { Text("View") }, onClick = {
                 isMenuExpanded = false
                 // TODO: show zoomed in view
@@ -740,8 +876,8 @@ private fun DrawSelectableSheep(sheep: Sheep, selected: Boolean, selectedSide: S
 }
 
 @Composable
-@Preview(widthDp = 800, heightDp = 640)
-@Preview(widthDp = 800, heightDp = 640, uiMode = UI_MODE_NIGHT_YES)
+@Preview(name = "Light", widthDp = 1280, heightDp = 720)
+@Preview(widthDp = 1280, heightDp = 720, uiMode = UI_MODE_NIGHT_YES)
 fun GameStatePreview() {
     val redSheep = Sheep(Card.SheepCard(1, SheepSide.Front, SheepColor.Red), Card.SheepCard(2, SheepSide.Back, SheepColor.Red))
     val blueSheep = Sheep(Card.SheepCard(3, SheepSide.Front, SheepColor.Blue), Card.SheepCard(4, SheepSide.Back, SheepColor.Blue))
@@ -779,9 +915,24 @@ fun GameStatePreview() {
             host = PlayerInfo(1, "Player", Flock(listOf())),
             deck = 54,
             discardPile = 0,
+            previousGameScores = listOf(
+                listOf(
+                    "Player 1" to 8,
+                    "Player 2" to 5,
+                    "Player 3" to 3,
+                    "Player 4" to 0,
+                ),
+                listOf(
+                    "Player 1" to 8,
+                    "Player 2" to 5,
+                    "Player 3" to 3,
+                    "Player 4" to 0,
+                ),
+            ),
             isStarted = true,
         ),
-        currentTurnPlayer = 1
+        currentTurnPlayer = 1,
+        dialog = GameDialogs.None
     )
 
     CardGameTheme {
@@ -789,8 +940,9 @@ fun GameStatePreview() {
             CompositionLocalProvider(LocalOnEvent provides {}) {
                 Scaffold {
                     if (state.clientRoom?.isStarted == true) GameBoard(state)
-                    else PreStartUI(state) {}
+                    else PreStartUI(state, {}) {}
                 }
+                DisplayDialogs(state)
             }
         }
     }

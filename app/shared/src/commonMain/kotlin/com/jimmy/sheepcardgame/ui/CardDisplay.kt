@@ -69,8 +69,7 @@ fun CardDisplay(card: Card, modifier: Modifier = Modifier, isClickable: Boolean 
 
     Box(
         modifier
-            .width(80.dp)
-            .aspectRatio(5f / 7f)
+            .size(80.dp,112.dp)
             .hoverable(interactionSource, isClickable)
             .styleable(styleState, style)
             .pointerInput(isClickable) {
@@ -171,7 +170,6 @@ fun BoxScope.DisplayModifierCard(card: Card.ModifierCard) {
     )
 }
 
-@OptIn(ExperimentalFoundationStyleApi::class)
 @Composable
 fun BoxScope.DisplaySheepCard(card: Card.SheepCard) {
 

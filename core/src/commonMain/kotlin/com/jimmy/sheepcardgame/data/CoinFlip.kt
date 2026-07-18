@@ -11,5 +11,6 @@ data class CoinFlip(
     val currentResult: Boolean?,
     val canReFlip: Boolean,
     val skippedReFlip: List<Long>,
+    val closedDialog: List<Long>,
     val iteration: Int = 0
 )

@@ -9,5 +9,6 @@ data class ClientRoom(
     val host: PlayerInfo,
     val deck: Int,
     val discardPile: Int,
+    val previousGameScores: List<List<Pair<String,Int>>> = emptyList(),
     val isStarted: Boolean = false,
 )

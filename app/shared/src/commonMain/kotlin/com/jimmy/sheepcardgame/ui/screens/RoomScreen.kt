@@ -1,34 +1,15 @@
 package com.jimmy.sheepcardgame.ui.screens
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.jimmy.sheepcardgame.GameViewModel
-import com.jimmy.sheepcardgame.ui.icons.PlayingCardsIcon
 import com.jimmy.sheepcardgame.ui.icons.RefreshIcon
 import com.jimmy.sheepcardgame.ui.navigation.Routes
 import org.koin.compose.viewmodel.koinViewModel
@@ -44,8 +25,12 @@ fun RoomScreen(route: Routes.RoomRoute, navigateTo: (Routes) -> Unit) {
     val code = rememberTextFieldState()
     var isError by remember { mutableStateOf(false) }
 
-    Scaffold {
-        Column(Modifier.padding(it).fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
+    LaunchedEffect(Unit) {
+        viewModel.fetchRoomsList()
+    }
+
+    Scaffold { paddingValues ->
+        Column(Modifier.padding(paddingValues).fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
             OutlinedTextField(
                 name,
                 label = { Text("Name") },
@@ -53,7 +38,7 @@ fun RoomScreen(route: Routes.RoomRoute, navigateTo: (Routes) -> Unit) {
                 lineLimits = TextFieldLineLimits.SingleLine,
                 isError = isError,
                 supportingText = {
-                    if(isError){
+                    if (isError) {
                         Text("Name must be not empty or blank.")
                     }
                 },
@@ -62,12 +47,12 @@ fun RoomScreen(route: Routes.RoomRoute, navigateTo: (Routes) -> Unit) {
                 }
             )
             ElevatedButton({
-                if(name.text.isBlank()) {
+                if (name.text.isBlank()) {
                     isError = true
                     return@ElevatedButton
                 }
-                viewModel.connectToServerCreateRoom(name.text.toString(), { navigateTo(Routes.GameRoute) },{})
-            }){ Text("Create Room") }
+                viewModel.connectToServerCreateRoom(name.text.toString(), { navigateTo(Routes.GameRoute) }, {})
+            }) { Text("Create Room") }
 
             HorizontalDivider()
 
@@ -83,28 +68,28 @@ fun RoomScreen(route: Routes.RoomRoute, navigateTo: (Routes) -> Unit) {
             )
             ElevatedButton({
                 viewModel.connectToServerJoinRoom(name.text.toString(), code.text.toString(), { navigateTo(Routes.GameRoute) }, {})
-            }){ Text("Join Room") }
+            }) { Text("Join Room") }
 
             HorizontalDivider()
 
-            LazyColumn{
+            LazyColumn {
                 stickyHeader {
                     Row {
                         IconButton({
                             viewModel.fetchRoomsList()
-                        }){
+                        }) {
                             Icon(RefreshIcon, contentDescription = "Settings")
                         }
                     }
                 }
-                items(state.roomsToJoin){
+                items(state.roomsToJoin) {
                     ListItem({
                         viewModel.connectToServerJoinRoom(name.text.toString(), it.code, { navigateTo(Routes.GameRoute) }, {})
                     }, overlineContent = {
                         Text(it.host.name)
                     }, supportingContent = {
                         Text(it.players.toString())
-                    }){
+                    }) {
                         Text(it.code)
                     }
                 }

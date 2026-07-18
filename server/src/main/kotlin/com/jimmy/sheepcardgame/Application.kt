@@ -75,7 +75,7 @@ fun Application.gameServerModule() {
                         return@webSocket
                     }
 
-                    val existingRoom = RoomManager.rooms[roomCode]
+                    val existingRoom = RoomManager.rooms[roomCode.uppercase()]
                     if (existingRoom == null) {
                         close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT, "Room not found"))
                         return@webSocket

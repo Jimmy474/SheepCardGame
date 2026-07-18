@@ -5,14 +5,11 @@ import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.websocket.*
-import io.ktor.client.request.get
+import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 
 class GameClient(
     val eventHandler: (S2CEvent) -> Unit,
@@ -40,7 +37,6 @@ class GameClient(
     private var webSocketSession: DefaultClientWebSocketSession? = null
 
     private val _connectionStatus = MutableStateFlow("Disconnected")
-    val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
     suspend fun connect(
         playerName: String,

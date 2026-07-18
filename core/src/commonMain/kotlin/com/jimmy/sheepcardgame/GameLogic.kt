@@ -2,11 +2,17 @@ package com.jimmy.sheepcardgame
 
 import com.jimmy.sheepcardgame.data.Card
 import com.jimmy.sheepcardgame.data.ModifierType
+import com.jimmy.sheepcardgame.data.Player
 import com.jimmy.sheepcardgame.data.Sheep
 import com.jimmy.sheepcardgame.data.SheepColor
 import com.jimmy.sheepcardgame.data.SheepSide
 
 object GameLogic {
+    const val MAX_PLAYERS = 4
+    const val INITIAL_HAND_SIZE = 5
+    const val MIN_HAND_SIZE = 3
+    const val MAX_HAND_SIZE = 7
+    const val GOLD_CARD_PENALTY = 3
 
     fun isValidSheep(cards: List<Card>): Boolean {
 
@@ -98,4 +104,7 @@ object GameLogic {
         return result
     }
 
+    fun getPoints(player: Player): Int{
+        return player.info.flock.sheep.sumOf { if(it.isFullRainbow) 2 else 1 } - (player.hand.count { it is Card.GoldCard } * GOLD_CARD_PENALTY)
+    }
 }

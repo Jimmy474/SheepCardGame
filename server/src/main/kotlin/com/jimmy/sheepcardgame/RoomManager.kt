@@ -1,5 +1,9 @@
 package com.jimmy.sheepcardgame
 
+import com.jimmy.sheepcardgame.GameLogic.INITIAL_HAND_SIZE
+import com.jimmy.sheepcardgame.GameLogic.MAX_HAND_SIZE
+import com.jimmy.sheepcardgame.GameLogic.MAX_PLAYERS
+import com.jimmy.sheepcardgame.GameLogic.MIN_HAND_SIZE
 import com.jimmy.sheepcardgame.data.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
@@ -35,13 +39,6 @@ data class PendingGoldCardAction(
 
 class Room(val code: String, var host: Connection) {
 
-    companion object {
-        const val MAX_PLAYERS = 4
-        const val INITIAL_HAND_SIZE = 5
-        const val MIN_HAND_SIZE = 3
-        const val MAX_HAND_SIZE = 7
-    }
-
     private val players = ConcurrentHashMap<Long, Player>()
     private val sockets = ConcurrentHashMap<Long, Connection>()
 
@@ -52,6 +49,10 @@ class Room(val code: String, var host: Connection) {
     var currentTurnPlayer: Long = -1
     var coinFlip: CoinFlip? = null
     var pendingGoldCardAction: PendingGoldCardAction? = null
+
+    var finalRoundAnnounced = false
+
+    val previousGameScores = mutableListOf<List<Pair<String, Int>>>()
 
     init {
         join(host)
@@ -77,7 +78,7 @@ class Room(val code: String, var host: Connection) {
             is C2SEvent.RequestCoinFlipC2SEvent       -> approveCoinFlip(event.card, event.isHead, event.opponent, event.user)
             is C2SEvent.InitiateCoinFlipC2SEvent      -> initiateCoinFlip(event.user)
             is C2SEvent.ReFlipCoinC2SEvent            -> reFlipCoin(event.cardId, event.user)
-            is C2SEvent.SkipReFlipCoinC2SEvent        -> skipReFlipCoin(event.user)
+            is C2SEvent.SkipReFlipCoinC2SEvent        -> skipReFlipCoin(event.permanent, event.user)
             is C2SEvent.EndCoinFlipC2SEvent           -> endCoinFlip(event.user)
 
             is C2SEvent.SelectedSheepC2SEvent         -> completeGoldCardPendingAction(event.sheep, event.user)
@@ -104,6 +105,7 @@ class Room(val code: String, var host: Connection) {
         sockets[connection.id] = connection
         players[connection.id] = player
         sendIndividualMessage(connection.id, S2CEvent.InitializePlayerS2CEvent(player).encodeToString())
+        sendIndividualMessage(connection.id, S2CEvent.InitializeOpponentsS2CEvent(players.values.filter { it != player }.map { it.asOpponent() }.toSet()).encodeToString())
 
         broadcast(S2CEvent.OpponentJoinedS2C(player.asOpponent()).encodeToString(), exclude = connection)
         updateClientRoom()
@@ -151,10 +153,15 @@ class Room(val code: String, var host: Connection) {
     }
 
     fun nextTurn() {
-        val previousCon = queue.last()
-        val previousPlayer = players[previousCon]!!
-        if (previousPlayer.hand.size > MAX_HAND_SIZE) {
-            sendIndividualMessage(previousCon, S2CEvent.ExceedsMaxHandSizeS2CEvent(previousPlayer.hand.size - MAX_HAND_SIZE).encodeToString())
+        players[currentTurnPlayer]?.let {
+            if (it.hand.size > MAX_HAND_SIZE) {
+                sendIndividualMessage(it.info.id, S2CEvent.ExceedsMaxHandSizeS2CEvent(it.hand.size - MAX_HAND_SIZE).encodeToString())
+                return
+            }
+        }
+
+        if(queue.isEmpty()) {
+            endGame()
             return
         }
 
@@ -164,7 +171,39 @@ class Room(val code: String, var host: Connection) {
         val drawnCards = getCardsFromDeck(maxOf(MIN_HAND_SIZE - nextPlayer.hand.size, 1))
         players[nextId] = nextPlayer.copy(hand = nextPlayer.hand + drawnCards)
         if (drawnCards.isNotEmpty()) queue.add(nextId)
+        else {
+            if(!finalRoundAnnounced) {
+                finalRoundAnnounced = true
+                broadcast(S2CEvent.FinalRound.encodeToString())
+            }
+            sendIndividualMessage(nextId,S2CEvent.LastTurn.encodeToString())
+        }
         updatePlayers()
+    }
+
+    private fun endGame() {
+        val points = players.values.map {
+            it.info.name to GameLogic.getPoints(it)
+        }.sortedByDescending { it.second }
+
+        isStarted = false
+        deck = Deck()
+        queue.clear()
+        currentTurnPlayer = -1
+        coinFlip = null
+        pendingGoldCardAction = null
+        finalRoundAnnounced = false
+
+        players.forEach { (id, player) ->
+            players[id] = player.copy(
+                info = player.info.copy(flock = Flock()),
+                hand = emptyList(),
+            )
+        }
+
+        previousGameScores += points
+        updatePlayers()
+        broadcast(S2CEvent.GameOverS2CEvent(points).encodeToString())
     }
 
     fun getCardsFromDeck(amount: Int): List<Card> {
@@ -226,10 +265,11 @@ class Room(val code: String, var host: Connection) {
             target = opponentId,
             playerChoice = isHead,
             currentResult = null,
-            canReFlip = queue.sumOf { id ->
-                players[id]?.hand?.count { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip } ?: 0
+            canReFlip = players.values.sumOf { p ->
+                p.hand.count { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip }
             } > 0,
-            skippedReFlip = emptyList()
+            skippedReFlip = emptyList(),
+            closedDialog = emptyList()
         ).let {
             coinFlip = it
             updatePlayers()
@@ -253,10 +293,11 @@ class Room(val code: String, var host: Connection) {
             val card = players[user]?.hand?.firstOrNull { it.id == cardId } ?: return
             manageCards(card, owner = user, add = false)
             deck.discardPile += card
-            val reFlipAmount = queue.sumOf { id ->
-                players[id]?.hand?.count { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip } ?: 0
+            val reFlipAmount = players.values.sumOf { p ->
+                p.hand.count { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip }
             }
             flip.copy(canReFlip = reFlipAmount > 0, currentResult = Random.nextBoolean(), skippedReFlip = emptyList(), iteration = flip.iteration + 1).let {
+                coinFlip = it
                 updatePlayers()
                 broadcast(S2CEvent.CoinFlipInitiateS2CEvent(it).encodeToString())
             }
@@ -264,16 +305,17 @@ class Room(val code: String, var host: Connection) {
 
     }
 
-    fun skipReFlipCoin(user: Long) {
+    fun skipReFlipCoin(permanent: Boolean, user: Long) {
         coinFlip?.let { flip ->
             val hasReFlipCard = players[user]?.hand?.any { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip } ?: false
             if (!hasReFlipCard) return
 
-            val reFlipAmount = queue.sumOf { id ->
-                players[id]?.hand?.count { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip } ?: 0
+            val reFlipAmount = players.values.sumOf { p ->
+                p.hand.count { it is Card.SpecialCard && it.specialType == SpecialType.ReFlip }
             }
-            val skippedReFlip = flip.skippedReFlip + user
-            flip.copy(skippedReFlip = skippedReFlip, canReFlip = reFlipAmount > skippedReFlip.size).let {
+            val skippedReFlip = if(!permanent) flip.skippedReFlip + user else flip.skippedReFlip
+            val closedDialog = if(permanent) flip.closedDialog + user else flip.closedDialog
+            flip.copy(skippedReFlip = skippedReFlip, closedDialog = closedDialog, canReFlip = reFlipAmount > skippedReFlip.size + closedDialog.size).let {
                 coinFlip = it
                 broadcast(S2CEvent.CoinFlipInitiateS2CEvent(it).encodeToString())
             }
@@ -429,7 +471,6 @@ class Room(val code: String, var host: Connection) {
         manageSheep(sheep, owner = user)
         manageCards(*cards.toTypedArray(), owner = user, add = false)
         updatePlayers()
-        println("cards played: $cards by user $user")
     }
 
     fun manageSheep(vararg sheep: Sheep, owner: Long, add: Boolean = true) {
@@ -484,5 +525,5 @@ class Room(val code: String, var host: Connection) {
         }
     }
 
-    fun asClientRoom() = ClientRoom(code, sockets.size, players[host.id]!!.info, deck.cards.size, deck.discardPile.size, isStarted)
+    fun asClientRoom() = ClientRoom(code, sockets.size, players[host.id]!!.info, deck.cards.size, deck.discardPile.size, previousGameScores, isStarted)
 }

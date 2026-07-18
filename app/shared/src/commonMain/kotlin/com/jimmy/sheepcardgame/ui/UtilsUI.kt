@@ -1,8 +1,32 @@
 package com.jimmy.sheepcardgame.ui
 
 import androidx.annotation.FloatRange
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -12,12 +36,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope.Companion.DefaultBlendMode
 import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import com.jimmy.sheepcardgame.ui.icons.CrownIcon
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -128,4 +159,49 @@ fun DrawScope.drawBorderedRect(
 ) {
     drawRoundRect(Color.Black, topLeft, size, CornerRadius(corner), Stroke(border))
     drawRoundRect(useRainbow, color, brush, topLeft, size, CornerRadius(corner))
+}
+
+@Composable
+fun SmallListItem(
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit = {},
+    headline: @Composable () -> Unit = {},
+    text: @Composable () -> Unit = {}
+){
+    Row(modifier, Arrangement.spacedBy(4.dp), Alignment.CenterVertically) {
+        icon()
+        Column{
+            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.titleLarge){
+                headline()
+            }
+            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyLarge){
+                text()
+            }
+        }
+    }
+}
+
+fun Modifier.pulsatingBorder(
+    enabled: Boolean,
+    color: Color = Color.Blue,
+    shape: Shape = CircleShape,
+    blur: Dp = 2.dp,
+    spread: Dp = 2.dp,
+    durationMillis: Int = 1000
+): Modifier = composed {
+    if (!enabled) return@composed this
+
+    val infiniteTransition = rememberInfiniteTransition(label = "borderAlphaPulse")
+
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "borderAlpha"
+    )
+
+    this.innerShadow(shape, Shadow(blur, color, spread, DpOffset.Zero, alpha))
 }
