@@ -2,7 +2,6 @@ package com.jimmy.sheepcardgame
 
 import com.jimmy.sheepcardgame.data.*
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 @Serializable
 sealed interface S2CEvent {
@@ -10,6 +9,8 @@ sealed interface S2CEvent {
     @Serializable
     data class InitializePlayerS2CEvent(val player: Player) : S2CEvent
 
+    @Serializable
+    data class UpdateRoomSettingsS2CEvent(val settings: RoomSettings) : S2CEvent
     @Serializable
     data class InitializeOpponentsS2CEvent(val opponents: Set<Opponent>) : S2CEvent
 
@@ -20,10 +21,10 @@ sealed interface S2CEvent {
     data class SelectFromGivenCardsS2CEvent(val amount: Int, val cards: List<Int>, val cardId: Int, val opponentId: Long) : S2CEvent
 
     @Serializable
-    data class OpponentJoinedS2C(val opponent: Opponent) : S2CEvent
+    data class OpponentJoinedS2CEvent(val opponent: Opponent) : S2CEvent
 
     @Serializable
-    data class OpponentLeftS2C(val opponent: Opponent) : S2CEvent
+    data class OpponentLeftS2CEvent(val opponent: Opponent) : S2CEvent
 
     @Serializable
     data class UpdateClientRoomS2CEvent(val clientRoom: ClientRoom) : S2CEvent
@@ -33,6 +34,9 @@ sealed interface S2CEvent {
 
     @Serializable
     data class CoinFlipInitiateS2CEvent(val coinFlip: CoinFlip) : S2CEvent
+
+    @Serializable
+    data class UpdateCoinFlipS2CEvent(val coinFlip: CoinFlip) : S2CEvent
 
     @Serializable
     data object CloseCoinFlipS2CEvent : S2CEvent
@@ -47,32 +51,38 @@ sealed interface S2CEvent {
     data class NotificationS2CEvent(val message: String) : S2CEvent
 
     @Serializable
-    data object LastTurn : S2CEvent
+    data object LastTurnS2CEvent : S2CEvent
 
     @Serializable
-    data object FinalRound : S2CEvent
+    data object FinalRoundS2CEvent : S2CEvent
+
+    @Serializable
+    data class SyncScoresS2CEvent(val scores: List<List<Pair<String,Int>>>) : S2CEvent
 
     @Serializable
     data class GameOverS2CEvent(val points: List<Pair<String,Int>>) : S2CEvent
 
-    fun encodeToString(): String = Json.encodeToString(this)
-
-    companion object {
-        fun decodeFromString(input: String): S2CEvent = Json.decodeFromString(input)
-    }
+    @Serializable
+    data class NotifyGameEventS2CEvent(val event: GameEvents) : S2CEvent
 }
 
 @Serializable
 sealed interface C2SEvent {
 
     @Serializable
+    data class LeaveMidGameC2SEvent(val user: Long) : C2SEvent
+
+    @Serializable
     data class RequestCardSelectionC2SEvent(val opponent: Long, val cardId: Int, val user: Long) : C2SEvent
 
     @Serializable
-    data class RequestCoinFlipC2SEvent(val card: Card, val isHead: Boolean, val opponent: Long, val user: Long) : C2SEvent
+    data class RequestCoinFlipC2SEvent(val cardId: Int, val opponent: Long, val user: Long) : C2SEvent
 
     @Serializable
-    data class InitiateCoinFlipC2SEvent(val user: Long) : C2SEvent
+    data class SelectFaceCoinFlipC2SEvent(val isHead: Boolean, val user: Long) : C2SEvent
+
+    @Serializable
+    data class FlipCoinC2SEvent(val user: Long) : C2SEvent
 
     @Serializable
     data class ReFlipCoinC2SEvent(val cardId: Int, val user: Long) : C2SEvent
@@ -93,16 +103,10 @@ sealed interface C2SEvent {
     data class SelectedCardsForSheepC2SEvent(val cards: List<Int>, val user: Long) : C2SEvent
 
     @Serializable
-    data class SelectedOpponentC2SEvent(val opponent: Opponent) : C2SEvent
-
-    @Serializable
-    data class SelectCoinFaceC2SEvent(val isHead: Boolean) : C2SEvent
-
-    @Serializable
     data object StartGameC2SEvent : C2SEvent
 
     @Serializable
-    data object EndTurnC2SEvent : C2SEvent
+    data class EndTurnC2SEvent(val user: Long) : C2SEvent
 
     @Serializable
     data class PlayCardsC2SEvent(val cards: List<Int>, val user: Long) : C2SEvent
@@ -118,12 +122,8 @@ sealed interface C2SEvent {
     data class FixSheepC2SEvent(val fixType: FixSheepType, val sheep: Sheep, val cardId: Int, val owner: Long, val user: Long) : C2SEvent
 
     @Serializable
-    data class DiscardC2SEvent(val card: Card, val user: Long) : C2SEvent
+    data class DiscardC2SEvent(val cards: List<Card>, val user: Long) : C2SEvent
 
-
-    fun encodeToString(): String = Json.encodeToString(this)
-
-    companion object {
-        fun decodeFromString(input: String): C2SEvent = Json.decodeFromString(input)
-    }
+    @Serializable
+    data class RequestRoomSettingsUpdateC2SEvent(val settings: RoomSettings, val host: Long) : C2SEvent
 }

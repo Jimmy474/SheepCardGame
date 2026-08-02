@@ -30,10 +30,10 @@ fun App() {
                 },
                 entryProvider = entryProvider {
                     entry<Routes.HomeRoute> {
-                        HomeScreen(it, ::navigate)
+                        HomeScreen(::navigate)
                     }
                     entry<Routes.RoomRoute> {
-                        RoomScreen(it, ::navigate)
+                        RoomScreen(::navigate)
                     }
                     entry<Routes.HowToPlayRoute> {
                         HowToPlayScreen(it, ::navigate)
@@ -45,7 +45,12 @@ fun App() {
                         AboutScreen(it, ::navigate)
                     }
                     entry<Routes.GameRoute> {
-                        GameScreen(it){
+                        GameScreen{
+                            backStack.removeLastOrNull()
+                        }
+                    }
+                    entry<Routes.LocalGameRoute> {
+                        LocalGameScreen{
                             backStack.removeLastOrNull()
                         }
                     }

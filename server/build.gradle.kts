@@ -22,10 +22,12 @@ dependencies {
     implementation(libs.ktor.serverWebsockets)
     implementation(libs.ktor.serverContentNegotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.serialization.kotlinx.cbor)
     implementation(libs.ktor.server.cors)
 
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.kotlin.testJunit)
+    testImplementation(libs.mockk.v11411)
 
 }
 tasks.withType<KotlinCompile>().configureEach {

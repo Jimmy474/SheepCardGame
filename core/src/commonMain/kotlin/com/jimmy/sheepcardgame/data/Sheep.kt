@@ -7,7 +7,23 @@ data class Sheep(
     val head: Card.SheepCard,
     val butt: Card.SheepCard,
     val modifier: Card.ModifierCard? = null,
+    val id: Int = ID_COUNTER,
 ) {
+
+    companion object {
+        var ID_COUNTER = 0
+            get() = field++
+    }
+
+    val name: String
+        get() = when {
+            isFrankenHeads -> "${head.sheepColor.name} & ${butt.sheepColor.name} Franken Heads"
+            isFrankenButts -> "${head.sheepColor.name} & ${butt.sheepColor.name} Franken Butts"
+            isPaint        -> "Painted ${head.sheepColor.name} & ${butt.sheepColor.name}"
+            isFullRainbow  -> "Rainbow"
+            else           -> "${head.sheepColor.name} & ${butt.sheepColor.name}"
+        }
+
     fun deFrankenCandidates(hand: List<Card>): List<Card.SheepCard> {
         if (modifier?.modifierType != ModifierType.Franken) return emptyList()
 

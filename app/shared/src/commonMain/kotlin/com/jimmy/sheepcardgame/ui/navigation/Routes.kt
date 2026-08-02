@@ -22,6 +22,9 @@ sealed interface Routes: NavKey{
     object GameRoute: Routes
 
     @Serializable
+    object LocalGameRoute: Routes
+
+    @Serializable
     object SettingsRoute: Routes
 
     @Serializable

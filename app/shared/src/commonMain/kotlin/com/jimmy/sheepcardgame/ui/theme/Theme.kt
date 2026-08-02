@@ -6,7 +6,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.style.ExperimentalFoundationStyleApi
 import androidx.compose.foundation.style.StyleScope
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
@@ -243,6 +245,7 @@ private val highContrastDarkColorScheme = darkColorScheme(
     surfaceContainerHighest = surfaceContainerHighestDarkHighContrast,
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CardGameTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -250,8 +253,10 @@ fun CardGameTheme(
 ) {
     val colorScheme = if (darkTheme) darkScheme else lightScheme
     CompositionLocalProvider(LocalCardGameTheme provides CardGameTheme(colorScheme = colorScheme, cardGameTypography())){
-        MaterialTheme(
+        MaterialExpressiveTheme(
             colorScheme = colorScheme,
+            motionScheme = MotionScheme.expressive(),
+            shapes = Shapes(),
             typography = cardGameTypography(),
             content = content
         )

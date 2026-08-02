@@ -25,7 +25,7 @@ kotlin {
         browser()
     }
 
-    androidLibrary {
+    android {
         namespace = "com.jimmy.sheepcardgame.core"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()

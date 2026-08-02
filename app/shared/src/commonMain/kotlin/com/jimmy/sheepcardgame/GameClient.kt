@@ -7,9 +7,12 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
+import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
+import io.ktor.serialization.kotlinx.cbor.cbor
 import io.ktor.websocket.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.cbor.Cbor
 
 class GameClient(
     val eventHandler: (S2CEvent) -> Unit,
@@ -17,9 +20,10 @@ class GameClient(
 
     companion object {
         private const val HOST = "127.0.0.1"
-        private const val PORT = 8080
+        private const val PORT = 8081
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     private val client = httpClient {
 
         defaultRequest {
@@ -27,10 +31,12 @@ class GameClient(
             url.port = PORT
         }
 
-        install(WebSockets)
+        install(WebSockets){
+            contentConverter = KotlinxWebsocketSerializationConverter(Cbor)
+        }
 
         install(ContentNegotiation) {
-            json()
+            cbor()
         }
     }
 
@@ -59,10 +65,9 @@ class GameClient(
                 _connectionStatus.value = "Connected"
                 successCallback()
 
-                for (frame in incoming) {
-                    if (frame is Frame.Text) {
-                        handleIncomingMessage(frame.readText())
-                    }
+                while (true) {
+                    val event = receiveDeserialized<S2CEvent>()
+                    eventHandler(event)
                 }
             }
         } catch (e: Exception) {
@@ -89,18 +94,9 @@ class GameClient(
 
     suspend fun sendEventToServer(event: C2SEvent) {
         try {
-            webSocketSession?.send(Frame.Text(event.encodeToString()))
+            webSocketSession?.sendSerialized(event)
         } catch (e: Exception) {
             println("Failed to send message: ${e.message}")
-        }
-    }
-
-    private fun handleIncomingMessage(jsonText: String) {
-        try {
-            val event = S2CEvent.decodeFromString(jsonText)
-            eventHandler(event)
-        } catch (_: Exception) {
-            println("Failed to parse incoming message: $jsonText")
         }
     }
 }

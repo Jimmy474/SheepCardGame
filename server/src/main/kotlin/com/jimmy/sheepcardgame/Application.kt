@@ -3,7 +3,8 @@ package com.jimmy.sheepcardgame
 import com.jimmy.sheepcardgame.data.ClientRoom
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
-import io.ktor.serialization.kotlinx.json.json
+import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
+import io.ktor.serialization.kotlinx.cbor.cbor
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -13,16 +14,20 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.cbor.Cbor
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 fun main() {
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::gameServerModule).start(wait = true)
+    embeddedServer(Netty, port = 8081, host = "0.0.0.0", module = Application::gameServerModule).start(wait = true)
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 fun Application.gameServerModule() {
 
     install(ContentNegotiation) {
-        json()
+        cbor()
     }
 
 
@@ -36,10 +41,10 @@ fun Application.gameServerModule() {
         anyHost() // @TODO: Don't do this in production if possible. Try to limit it.
     }
     install(WebSockets) {
+        contentConverter = KotlinxWebsocketSerializationConverter(Cbor)
         pingPeriod = 15.seconds
         timeout = 15.seconds
         maxFrameSize = Long.MAX_VALUE
-        masking = false
     }
 
     routing {
@@ -60,12 +65,12 @@ fun Application.gameServerModule() {
                 return@webSocket
             }
 
-            val thisConnection = Connection(this, name)
+            val thisServerConnection = ServerConnection(this, name)
             val room: Room
 
             when (action) {
                 "create" -> {
-                    room = RoomManager.newRoom(thisConnection)
+                    room = RoomManager.newRoom(thisServerConnection)
                     log.info("Server: $name created room ${room.code}")
                 }
 
@@ -81,7 +86,7 @@ fun Application.gameServerModule() {
                         return@webSocket
                     }
 
-                    val didJoin = existingRoom.join(thisConnection)
+                    val didJoin = existingRoom.join(thisServerConnection)
                     if (didJoin) {
                         room = existingRoom
                         log.info("Server: $name joined room ${room.code}")
@@ -98,26 +103,38 @@ fun Application.gameServerModule() {
             }
 
             try {
-                for (frame in incoming) {
-                    frame as? Frame.Text ?: continue
-                    val receivedText = frame.readText()
-                    val c2SEvent = C2SEvent.decodeFromString(receivedText)
-                    room.handleC2SEvent(thisConnection, c2SEvent)
+                while (true) {
+                    val event = receiveDeserialized<C2SEvent>()
+                    room.handleC2SEvent(thisServerConnection, event)
                 }
             } catch (e: Exception) {
-                log.error("Server: ${thisConnection.name} disconnected unexpectedly: ${e.localizedMessage}")
+                log.error("Server: ${thisServerConnection.name} disconnected unexpectedly: ${e.localizedMessage}")
             } finally {
-                val isEmpty = room.leave(thisConnection)
-
-                if (isEmpty) {
-                    RoomManager.rooms.remove(room.code)
-                    log.info("Server: Room ${room.code} destroyed (empty).")
-                } else if (thisConnection == room.host) {
-                    room.changeHost()
-                } else {
-                    log.info("Server: ${thisConnection.name} left room ${room.code}.")
-                }
+                room.leave(thisServerConnection.id)
             }
         }
+    }
+}
+
+object RoomManager {
+    val rooms = ConcurrentHashMap<String, Room>()
+
+    fun newRoom(host: ServerConnection): Room {
+        val code = generateRoomCode()
+        Room(code, host) {
+            rooms.remove(it)
+        }.let {
+            rooms[code] = it
+            return it
+        }
+    }
+
+    private fun generateRoomCode(): String {
+        val allowedChars = ('A'..'Z') + ('0'..'9').asIterable()
+        var code: String
+        do {
+            code = (0..5).map { allowedChars.random() }.joinToString("")
+        } while (rooms.containsKey(code))
+        return code
     }
 }

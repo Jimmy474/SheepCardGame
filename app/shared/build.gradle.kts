@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -34,10 +35,17 @@ kotlin {
 
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        browser()
+        browser{
+            commonWebpackConfig {
+                devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
+                    open = true
+                    port = 8080
+                }
+            }
+        }
     }
 
-    androidLibrary {
+    android {
         namespace = "com.jimmy.sheepcardgame.app.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
@@ -73,6 +81,7 @@ kotlin {
             implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.ktor.serialization.kotlinx.cbor)
 
             api(project.dependencies.platform(libs.koin.bom))
             api(libs.koin.core)
@@ -82,6 +91,7 @@ kotlin {
             api(libs.compottie)
             api(libs.compottie.resources)
             implementation(libs.koin.annotations)
+            implementation(libs.coil.compose)
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)

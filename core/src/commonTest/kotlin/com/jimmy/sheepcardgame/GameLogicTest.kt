@@ -13,16 +13,16 @@ class GameLogicTest {
     @Test
     fun isValidSheepTest() {
 
-        val redHead = Card.SheepCard(1,SheepSide.Front, SheepColor.Red)
-        val blueHead = Card.SheepCard(2,SheepSide.Front, SheepColor.Blue)
-        val rainbowHead = Card.SheepCard(3,SheepSide.Front, SheepColor.Rainbow)
+        val redHead = Card.SheepCard(1, SheepSide.Front, SheepColor.Red)
+        val blueHead = Card.SheepCard(2, SheepSide.Front, SheepColor.Blue)
+        val rainbowHead = Card.SheepCard(3, SheepSide.Front, SheepColor.Rainbow)
 
-        val redButt = Card.SheepCard(4,SheepSide.Back, SheepColor.Red)
-        val blueButt = Card.SheepCard(5,SheepSide.Back, SheepColor.Blue)
-        val rainbowButt = Card.SheepCard(6,SheepSide.Back, SheepColor.Rainbow)
+        val redButt = Card.SheepCard(4, SheepSide.Back, SheepColor.Red)
+        val blueButt = Card.SheepCard(5, SheepSide.Back, SheepColor.Blue)
+        val rainbowButt = Card.SheepCard(6, SheepSide.Back, SheepColor.Rainbow)
 
-        val paint = Card.ModifierCard(7,ModifierType.Paint)
-        val franken = Card.ModifierCard(8,ModifierType.Franken)
+        val paint = Card.ModifierCard(7, ModifierType.Paint)
+        val franken = Card.ModifierCard(8, ModifierType.Franken)
 
         // Invalid number of cards
         assertFalse(GameLogic.isValidSheep(emptyList()), "0 cards should be invalid")

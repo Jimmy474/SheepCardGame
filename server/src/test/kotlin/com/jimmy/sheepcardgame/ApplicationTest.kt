@@ -9,12 +9,13 @@ import kotlin.test.*
 class ApplicationTest {
 
     @Test
-    fun testRoot() = testApplication {
+    fun `rooms endpoint starts empty`() = testApplication {
+        RoomManager.rooms.clear()
         application {
-
+            gameServerModule()
         }
-        val response = client.get("/")
+        val response = client.get("/rooms")
         assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals("Hello, Ktor!", response.bodyAsText())
+        assertEquals("[]", response.bodyAsText())
     }
 }

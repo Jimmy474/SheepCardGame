@@ -3,16 +3,13 @@ package com.jimmy.sheepcardgame
 import com.jimmy.sheepcardgame.data.Card
 import com.jimmy.sheepcardgame.data.ModifierType
 import com.jimmy.sheepcardgame.data.Player
+import com.jimmy.sheepcardgame.data.RoomSettings
 import com.jimmy.sheepcardgame.data.Sheep
 import com.jimmy.sheepcardgame.data.SheepColor
 import com.jimmy.sheepcardgame.data.SheepSide
 
 object GameLogic {
     const val MAX_PLAYERS = 4
-    const val INITIAL_HAND_SIZE = 5
-    const val MIN_HAND_SIZE = 3
-    const val MAX_HAND_SIZE = 7
-    const val GOLD_CARD_PENALTY = 3
 
     fun isValidSheep(cards: List<Card>): Boolean {
 
@@ -35,20 +32,20 @@ object GameLogic {
         return if (modifierCard == null) {
             Sheep(
                 cards.filterIsInstance<Card.SheepCard>().firstOrNull { it.sheepSide == SheepSide.Front } ?: return null,
-                cards.filterIsInstance<Card.SheepCard>().firstOrNull { it.sheepSide == SheepSide.Back } ?: return null
+                cards.filterIsInstance<Card.SheepCard>().firstOrNull { it.sheepSide == SheepSide.Back } ?: return null,
             )
         } else {
             when (modifierCard.modifierType) {
                 ModifierType.Paint   -> Sheep(
                     cards.filterIsInstance<Card.SheepCard>().firstOrNull { it.sheepSide == SheepSide.Front } ?: return null,
                     cards.filterIsInstance<Card.SheepCard>().firstOrNull { it.sheepSide == SheepSide.Back } ?: return null,
-                    modifierCard
+                    modifierCard,
                 )
 
                 ModifierType.Franken -> Sheep(
                     cards.filterIsInstance<Card.SheepCard>().first(),
                     cards.filterIsInstance<Card.SheepCard>().last(),
-                    modifierCard
+                    modifierCard,
                 )
             }
         }
@@ -82,29 +79,7 @@ object GameLogic {
         else null
     }
 
-    fun getSheep(cards: List<Card>): List<Sheep>{
-        if(cards.size < 2) return emptyList()
-        return getUniqueCombinationsOfThree(cards.filter{ it is Card.SheepCard || it is Card.ModifierCard }).mapNotNull { buildSheep(it) }
-    }
-
-    fun <T> getUniqueCombinationsOfThree(list: List<T>): List<List<T>> {
-        val uniqueList = list.distinct()
-        if(uniqueList.size < 3) return listOf(uniqueList)
-
-        val result = mutableListOf<List<T>>()
-        val size = uniqueList.size
-
-        for (i in 0 until size - 2) {
-            for (j in i + 1 until size - 1) {
-                for (k in j + 1 until size) {
-                    result.add(listOf(uniqueList[i], uniqueList[j], uniqueList[k]))
-                }
-            }
-        }
-        return result
-    }
-
-    fun getPoints(player: Player): Int{
-        return player.info.flock.sheep.sumOf { if(it.isFullRainbow) 2 else 1 } - (player.hand.count { it is Card.GoldCard } * GOLD_CARD_PENALTY)
+    fun getPoints(player: Player, settings: RoomSettings): Int{
+        return player.info.flock.sheep.sumOf { if(it.isFullRainbow) settings.rainbowSheepPoints else 1 } - (player.hand.count { it is Card.GoldCard } * settings.goldCardPenalty)
     }
 }
