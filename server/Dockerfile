@@ -3,7 +3,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN ./gradlew :server:buildFatJar --no-daemon
+RUN gradle :server:buildFatJar --no-daemon
 
 FROM eclipse-temurin:25-jre
 WORKDIR /app
