@@ -41,7 +41,10 @@ fun main() {
 @OptIn(ExperimentalSerializationApi::class)
 fun Application.gameServerModule() {
 
-    val env = dotenv()
+    val env = dotenv{
+        directory = "/etc/secrets"
+        filename = ".env"
+    }
     val httpClient = HttpClient(OkHttp) {
         install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
