@@ -13,7 +13,10 @@ sealed interface Routes: NavKey{
     object HomeRoute: Routes
 
     @Serializable
-    object RoomRoute: Routes
+    data class RoomRoute(
+        val roomCode: String? = null,
+        val name: String? = null
+    ): Routes
 
     @Serializable
     object HowToPlayRoute: Routes

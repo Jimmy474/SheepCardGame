@@ -285,15 +285,9 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    fun connectToServerCreateRoom(text: String, navigateToGame: () -> Unit, failedCallback: () -> Unit) {
+    fun connectToServerJoinRoom(text: String, code: String?, navigateToGame: () -> Unit, failedCallback: () -> Unit) {
         viewModelScope.launch {
-            client.connect(text, "create", navigateToGame, failedCallback)
-        }
-    }
-
-    fun connectToServerJoinRoom(text: String, code: String, navigateToGame: () -> Unit, failedCallback: () -> Unit) {
-        viewModelScope.launch {
-            client.connect(text, "join", navigateToGame, failedCallback, code)
+            client.connect(text, navigateToGame, failedCallback, code)
         }
     }
 

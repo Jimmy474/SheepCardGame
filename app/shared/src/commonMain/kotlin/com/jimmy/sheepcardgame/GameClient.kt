@@ -20,15 +20,22 @@ class GameClient(
 ) {
 
     companion object {
-        private const val IS_LOCAL = false
+        private val currentHost = getPlatform().name
+        private val IS_LOCAL = currentHost == "localhost" || currentHost == "127.0.0.1"
+        private val IS_DISCORD = currentHost.endsWith(".discordsays.com")
 
         private const val RENDER_HOST = "sheepcardgame.onrender.com"
         private const val LOCAL_HOST = "127.0.0.1"
 
-        private val HOST = if (IS_LOCAL) LOCAL_HOST else RENDER_HOST
+        private val HOST = when {
+            IS_LOCAL -> LOCAL_HOST
+            IS_DISCORD -> currentHost
+            else -> RENDER_HOST
+        }
         private val HTTP_PROTOCOL = if (IS_LOCAL) URLProtocol.HTTP else URLProtocol.HTTPS
         private val WS_PROTOCOL = if (IS_LOCAL) URLProtocol.WS else URLProtocol.WSS
         private val PORT = if (IS_LOCAL) 8080 else null
+        private val PATH_PREFIX = if (IS_DISCORD) "api/" else ""
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -58,7 +65,6 @@ class GameClient(
 
     suspend fun connect(
         playerName: String,
-        action: String,
         successCallback: () -> Unit,
         failedCallback: () -> Unit,
         code: String? = null,
@@ -67,12 +73,11 @@ class GameClient(
             _connectionStatus.value = "Connecting..."
 
             client.webSocket(
-                path = "play",
+                path = "${PATH_PREFIX}play",
                 request = {
                     url {
                         protocol = WS_PROTOCOL
                         parameters.append("playerName", playerName)
-                        parameters.append("action", action)
                         if (code != null) parameters.append("roomCode", code)
                     }
                 }
@@ -96,7 +101,7 @@ class GameClient(
     }
 
     suspend fun getRoomsList(): List<ClientRoom> {
-        return client.get("rooms").body<List<ClientRoom>>()
+        return client.get("${PATH_PREFIX}rooms").body<List<ClientRoom>>()
     }
 
     suspend fun disconnect() {

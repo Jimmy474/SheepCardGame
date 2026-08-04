@@ -3,6 +3,7 @@ package com.jimmy.sheepcardgame
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -11,10 +12,33 @@ import com.jimmy.sheepcardgame.ui.navigation.Routes
 import com.jimmy.sheepcardgame.ui.navigation.RoutesConfig
 import com.jimmy.sheepcardgame.ui.screens.*
 import com.jimmy.sheepcardgame.ui.theme.CardGameTheme
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun App() {
     val backStack = rememberNavBackStack(RoutesConfig, Routes.HomeRoute)
+
+    LaunchedEffect(Unit) {
+        val isDiscord = getPlatform().name.endsWith(".discordsays.com")
+        val context = getDiscordContext()
+
+        if (!isDiscord) {
+            backStack.clear()
+            backStack.add(Routes.HomeRoute)
+        } else {
+            while (context.instanceId == null) {
+                delay(100.milliseconds)
+            }
+            backStack.clear()
+            if (context.isDM == true) {
+                backStack.add(Routes.LocalGameRoute)
+            } else {
+                val roomCode = context.instanceId.take(6).uppercase()
+                backStack.add(Routes.RoomRoute(roomCode = roomCode, name = context.username ?: "Guest"))
+            }
+        }
+    }
 
     fun navigate(route: Routes) {
         backStack.add(route)
@@ -33,7 +57,7 @@ fun App() {
                         HomeScreen(::navigate)
                     }
                     entry<Routes.RoomRoute> {
-                        RoomScreen(::navigate)
+                        RoomScreen(it,::navigate)
                     }
                     entry<Routes.HowToPlayRoute> {
                         HowToPlayScreen(it, ::navigate)

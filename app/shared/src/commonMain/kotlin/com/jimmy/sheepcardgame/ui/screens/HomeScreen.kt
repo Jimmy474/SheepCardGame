@@ -18,7 +18,7 @@ fun HomeScreen(navigateTo: (Routes) -> Unit) {
         Column(Modifier.padding(it).fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
             Text("Is That Sheep\nLooking At Me?", style = MaterialTheme.typography.displayLargeEmphasized, textAlign = TextAlign.Center)
 
-            ElevatedButton({ navigateTo(Routes.RoomRoute) }){ Text("Play") }
+            ElevatedButton({ navigateTo(Routes.RoomRoute()) }){ Text("Play") }
             ElevatedButton({ navigateTo(Routes.LocalGameRoute) }){ Text("Offline Play") }
             OutlinedButton({ navigateTo(Routes.HowToPlayRoute) }){ Text("How To Play?") }
             OutlinedButton({ navigateTo(Routes.SettingsRoute) }){ Text("Settings") }

@@ -10,3 +10,7 @@ interface Platform {
 expect fun getPlatform(): Platform
 
 expect fun httpClient(config: HttpClientConfig<*>.() -> Unit = {}): HttpClient
+
+data class DiscordContext(val isDM: Boolean?, val instanceId: String?, val username: String?)
+
+expect suspend fun getDiscordContext(): DiscordContext

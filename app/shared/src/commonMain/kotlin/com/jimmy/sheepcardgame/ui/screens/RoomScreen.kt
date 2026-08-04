@@ -20,19 +20,27 @@ import com.jimmy.sheepcardgame.ui.theme.CardGameTheme
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-fun RoomScreen(navigateTo: (Routes) -> Unit) {
+fun RoomScreen(route: Routes.RoomRoute, navigateTo: (Routes) -> Unit) {
 
     val viewModel = koinViewModel<GameViewModel>()
     val state by viewModel.state.collectAsState()
+    var loading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(route.roomCode){
+        loading = true
+        viewModel.connectToServerJoinRoom(route.name ?: "Guest", route.roomCode, { navigateTo(Routes.GameRoute) }, {})
+    }
 
     LaunchedEffect(Unit) {
         viewModel.fetchRoomsList()
     }
 
-    RoomScreenLayout(
+    if (loading) Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator()
+    } else RoomScreenLayout(
         state = state,
         onCreateRoom = {
-            viewModel.connectToServerCreateRoom(it, { navigateTo(Routes.GameRoute) }, {})
+            viewModel.connectToServerJoinRoom(it, null, { navigateTo(Routes.GameRoute) }, {})
         },
         onJoinRoom = { name, code ->
             viewModel.connectToServerJoinRoom(name, code, { navigateTo(Routes.GameRoute) }, {})
