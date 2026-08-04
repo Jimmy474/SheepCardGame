@@ -1,6 +1,7 @@
 package com.jimmy.sheepcardgame
 
 import com.jimmy.sheepcardgame.data.ClientRoom
+import io.ktor.client.HttpClient
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -19,19 +20,30 @@ class GameClient(
 ) {
 
     companion object {
-        private const val HOST = "127.0.0.1"
-        private const val PORT = 8080
+        private const val IS_LOCAL = false
+
+        private const val RENDER_HOST = "sheepcardgame.onrender.com"
+        private const val LOCAL_HOST = "127.0.0.1"
+
+        private val HOST = if (IS_LOCAL) LOCAL_HOST else RENDER_HOST
+        private val HTTP_PROTOCOL = if (IS_LOCAL) URLProtocol.HTTP else URLProtocol.HTTPS
+        private val WS_PROTOCOL = if (IS_LOCAL) URLProtocol.WS else URLProtocol.WSS
+        private val PORT = if (IS_LOCAL) 8080 else null
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    private val client = httpClient {
+    private val client = HttpClient {
+        expectSuccess = true
 
         defaultRequest {
-            url.host = HOST
-            url.port = PORT
+            url {
+                protocol = HTTP_PROTOCOL
+                host = HOST
+                PORT?.let { port = it }
+            }
         }
 
-        install(WebSockets){
+        install(WebSockets) {
             contentConverter = KotlinxWebsocketSerializationConverter(Cbor)
         }
 
@@ -54,13 +66,17 @@ class GameClient(
         try {
             _connectionStatus.value = "Connecting..."
 
-            client.webSocket(method = HttpMethod.Get, host = HOST, port = PORT, path = "/play", request = {
-                url {
-                    parameters.append("playerName", playerName)
-                    parameters.append("action", action)
-                    if (code != null) parameters.append("roomCode", code)
+            client.webSocket(
+                path = "play",
+                request = {
+                    url {
+                        protocol = WS_PROTOCOL
+                        parameters.append("playerName", playerName)
+                        parameters.append("action", action)
+                        if (code != null) parameters.append("roomCode", code)
+                    }
                 }
-            }) {
+            ) {
                 webSocketSession = this
                 _connectionStatus.value = "Connected"
                 successCallback()
@@ -80,11 +96,7 @@ class GameClient(
     }
 
     suspend fun getRoomsList(): List<ClientRoom> {
-        return client.get {
-            url {
-                path("rooms")
-            }
-        }.body<List<ClientRoom>>()
+        return client.get("rooms").body<List<ClientRoom>>()
     }
 
     suspend fun disconnect() {

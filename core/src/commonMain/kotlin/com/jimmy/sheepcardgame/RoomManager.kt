@@ -131,7 +131,7 @@ class Room(val code: String, var host: Connection, val onDestroy: (String) -> Un
         players.remove(id)
         sockets.remove(id)
 
-        if (sockets.size == 1) endGame()
+        if (sockets.size == 1 && isStarted) endGame()
 
         if (sockets.isEmpty()) {
             onDestroy(code)
