@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 fun main() {
-    embeddedServer(Netty, port = 8081, host = "0.0.0.0", module = Application::gameServerModule).start(wait = true)
+    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::gameServerModule).start(wait = true)
 }
 
 @OptIn(ExperimentalSerializationApi::class)

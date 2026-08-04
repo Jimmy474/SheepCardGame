@@ -20,7 +20,7 @@ class GameClient(
 
     companion object {
         private const val HOST = "127.0.0.1"
-        private const val PORT = 8081
+        private const val PORT = 8080
     }
 
     @OptIn(ExperimentalSerializationApi::class)
