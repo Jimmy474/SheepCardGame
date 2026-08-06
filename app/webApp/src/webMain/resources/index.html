@@ -16,37 +16,5 @@
     </circle>
 </svg>
 <script type="application/javascript" src="webApp.js"></script>
-<script type="module">
-    import { DiscordSDK } from "https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@2.5.0/+esm";
-    const discordSdk = new DiscordSDK("1534122316597039134");
-
-    async function initDiscord() {
-        await discordSdk.setup();
-
-        const { code } = await discordSdk.commands.authorize({
-            client_id: "1534122316597039134",
-            response_type: "code",
-            state: "",
-            prompt: "none",
-            scope: ["identify"]
-        });
-
-        const response = await fetch("api/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code })
-        });
-        const user = await response.json();
-
-        window.discordEnv = {
-            isDM: discordSdk.guildId == null,
-            instanceId: discordSdk.instanceId,
-            username: user.username
-        };
-
-        discordSdk.ready();
-    }
-    initDiscord();
-</script>
 </body>
 </html>

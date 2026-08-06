@@ -13,5 +13,3 @@ actual fun httpClient(config: HttpClientConfig<*>.() -> Unit) = HttpClient(Darwi
         }
     }
 }
-
-actual suspend fun getDiscordContext() = DiscordContext(null,null,null)

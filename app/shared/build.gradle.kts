@@ -108,6 +108,7 @@ kotlin {
         webMain.dependencies {
             implementation(libs.ktor.client.js)
             implementation(libs.wrappers.browser)
+            implementation(npm("@discord/embedded-app-sdk", "2.5.0"))
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

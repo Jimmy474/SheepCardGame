@@ -11,6 +11,10 @@ expect fun getPlatform(): Platform
 
 expect fun httpClient(config: HttpClientConfig<*>.() -> Unit = {}): HttpClient
 
-data class DiscordContext(val isDM: Boolean?, val instanceId: String?, val username: String?)
-
-expect suspend fun getDiscordContext(): DiscordContext
+data class UserProfile(
+    val id: String,
+    val name: String,
+    val avatarUrl: String,
+    val channelId: String?,
+    val isDM: Boolean
+)

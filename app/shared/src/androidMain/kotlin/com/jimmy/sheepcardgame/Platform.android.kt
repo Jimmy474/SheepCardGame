@@ -21,5 +21,3 @@ actual fun httpClient(config: HttpClientConfig<*>.() -> Unit) = HttpClient(OkHtt
         }
     }
 }
-
-actual suspend fun getDiscordContext() = DiscordContext(null,null,null)

@@ -12,30 +12,26 @@ import com.jimmy.sheepcardgame.ui.navigation.Routes
 import com.jimmy.sheepcardgame.ui.navigation.RoutesConfig
 import com.jimmy.sheepcardgame.ui.screens.*
 import com.jimmy.sheepcardgame.ui.theme.CardGameTheme
-import kotlinx.coroutines.delay
-import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
-fun App() {
+fun App(userProfile: UserProfile? = null) {
     val backStack = rememberNavBackStack(RoutesConfig, Routes.HomeRoute)
 
-    LaunchedEffect(Unit) {
-        val isDiscord = getPlatform().name.endsWith(".discordsays.com")
-        val context = getDiscordContext()
+    LaunchedEffect(userProfile) {
+        userProfile?.let{
+            val isDiscord = getPlatform().name.endsWith(".discordsays.com")
 
-        if (!isDiscord) {
-            backStack.clear()
-            backStack.add(Routes.HomeRoute)
-        } else {
-            while (context.instanceId == null) {
-                delay(100.milliseconds)
-            }
-            backStack.clear()
-            if (context.isDM == true) {
-                backStack.add(Routes.LocalGameRoute)
+            if (!isDiscord) {
+                backStack.clear()
+                backStack.add(Routes.HomeRoute)
             } else {
-                val roomCode = context.instanceId.take(6).uppercase()
-                backStack.add(Routes.RoomRoute(roomCode = roomCode, name = context.username ?: "Guest"))
+                backStack.clear()
+                if (it.isDM) {
+                    backStack.add(Routes.LocalGameRoute)
+                } else {
+                    val roomCode = it.channelId?.take(6) ?: "ABCDEFG"
+                    backStack.add(Routes.RoomRoute(roomCode = roomCode, name = it.name))
+                }
             }
         }
     }

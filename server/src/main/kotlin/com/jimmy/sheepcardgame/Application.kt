@@ -6,8 +6,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.forms.FormDataContent
-import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.HttpHeaders
@@ -87,14 +85,7 @@ fun Application.gameServerModule() {
                 }))
             }.body<DiscordTokenResponse>()
 
-            val userProfile = httpClient.get("https://discord.com/api/v10/users/@me") {
-                header(HttpHeaders.Authorization, "Bearer ${tokenResponse.accessToken}")
-            }.body<DiscordUser>()
-
-            call.respond(mapOf(
-                "username" to (userProfile.globalName ?: userProfile.username),
-                "id" to userProfile.id
-            ))
+            call.respondText(tokenResponse.accessToken)
         }
 
         get("/rooms") {
@@ -138,14 +129,6 @@ data class TokenRequest(val code: String)
 
 @Serializable
 data class DiscordTokenResponse(@SerialName("access_token") val accessToken: String)
-
-@Serializable
-data class DiscordUser(
-    val id: String,
-    val username: String,
-    @SerialName("global_name") val globalName: String? = null,
-    val avatar: String? = null
-)
 
 object RoomManager {
     val rooms = ConcurrentHashMap<String, Room>()

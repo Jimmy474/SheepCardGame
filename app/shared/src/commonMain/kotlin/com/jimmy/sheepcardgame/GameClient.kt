@@ -36,6 +36,8 @@ class GameClient(
         private val WS_PROTOCOL = if (IS_LOCAL) URLProtocol.WS else URLProtocol.WSS
         private val PORT = if (IS_LOCAL) 8080 else null
         private val PATH_PREFIX = if (IS_DISCORD) "api/" else ""
+
+        fun getUrl(path: String) = "https://$HOST:$PORT/$path"
     }
 
     @OptIn(ExperimentalSerializationApi::class)
